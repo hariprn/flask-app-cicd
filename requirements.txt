@@ -1,0 +1,8 @@
+Flask
+Flask-PyMongo
+python-dotenv
+pymongo
+pytest
+pylint
+bandit
+black
