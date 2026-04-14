@@ -1,133 +1,389 @@
-# Student Registration System
+# Flask CI/CD Pipeline using Jenkins and GitHub Actions
 
-A simple **Flask** web application to manage student records with **MongoDB** as the backend database. Users can **add, view, update, and delete** student details.
+## Project Overview
 
----
+This project demonstrates a complete CI/CD implementation for a Flask web application integrated with MongoDB Atlas. The assignment is implemented in two parts:
 
-## Features
+* Part 1: Jenkins CI/CD Pipeline
+* Part 2: GitHub Actions CI/CD Pipeline
 
-* List all students on the home page
-* Add a new student
-* Update existing student details
-* Delete a student with confirmation
-* Simple and responsive UI using Bootstrap
+The application performs CRUD operations on student records and stores data in MongoDB Atlas.
 
 ---
 
-## Tech Stack
-
-* **Backend:** Python, Flask
-* **Database:** MongoDB (via Flask-PyMongo)
-* **Frontend:** HTML, Jinja2 templates, Bootstrap 5
-* **Environment Variables:** Managed via `.env` file
-
----
-
-## Setup Instructions
-
-### 1. Clone the repository
-
-```bash
-git clone <your-repo-url>
-cd <repo-folder>
-```
-
-### 2. Create and activate a virtual environment
-
-```bash
-python -m venv venv
-# Activate venv
-# Windows:
-venv\Scripts\activate
-# Linux / Mac:
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-**`requirements.txt` example:**
+## Architecture Diagram
 
 ```
-Flask
-Flask-PyMongo
-python-dotenv
-bson
-```
-
-### 4. Configure environment variables
-
-Create a `.env` file in the project root:
-
-```
-MONGO_URI=<your-mongodb-connection-string>
-SECRET_KEY=<your-secret-key>
-```
-
-### 5. Run the application
-
-```bash
-python app.py
-```
-
-Open your browser at: [http://localhost:8000](http://localhost:8000)
-
----
-
-## Project Structure
-
-```
-project/
-│
-├── templates/
-│   ├── base.html
-│   ├── index.html
-│   ├── add_student.html
-│   ├── update_student.html
-│
-├── app.py
-├── requirements.txt
-└── .env
+                +----------------------+
+                |      Developer       |
+                |   (Code Commit)      |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |      GitHub Repo     |
+                +----------+-----------+
+                           |
+        +------------------+------------------+
+        |                                     |
+        v                                     v
++----------------------+          +----------------------+
+|   GitHub Actions     |          |       Jenkins        |
+|   (CI/CD Pipeline)   |          |   (Docker on EC2)    |
++----------+-----------+          +----------+-----------+
+           |                                 |
+           v                                 v
+   +------------------+             +------------------+
+   |  Build & Test    |             |  Build & Test    |
+   +------------------+             +------------------+
+           |
+           v
+   +--------------------------+
+   |  Deployment Strategy     |
+   +--------------------------+
+        |              |
+        |              |
+        v              v
++----------------+   +----------------------+
+| Staging Deploy |   | Production Deploy    |
+| (staging branch)|  | (Git Tag / Release) |
++----------------+   +----------------------+
+        |                      |
+        +----------+-----------+
+                   |
+                   v
+        +----------------------+
+        |   Flask Application  |
+        |   (EC2 - Port 5000)  |
+        +----------+-----------+
+                   |
+                   v
+        +----------------------+
+        |   MongoDB Atlas      |
+        |   (Cloud Database)   |
+        +----------------------+
 ```
 
 ---
 
-## Screenshots
+## Environment Variables
 
-**Home Page**
-Lists all students with Edit/Delete buttons.
-- <img width="1902" height="607" alt="image" src="https://github.com/user-attachments/assets/a58a6a6d-4978-4769-8074-232e4d31e69d" />
-
-
-**Add Student**
-Form to add a new student.
-- <img width="1897" height="801" alt="image" src="https://github.com/user-attachments/assets/d65d25c3-ebb5-410a-adb1-e130ad7c5878" />
-
-
-**Update Student**
-Form pre-filled with student details.
-- <img width="1905" height="897" alt="image" src="https://github.com/user-attachments/assets/04febf01-879f-431f-ab07-abcfb993acf1" />
-
-
+```
+MONGO_URI=<your_mongodb_connection_string>
+SECRET_KEY=<your_secret_key>
+```
 
 ---
 
-## Notes
+# PART 1: Jenkins CI/CD Pipeline
 
-* Make sure MongoDB is running and accessible via the URI in `.env`
-* Delete action includes a confirmation page to prevent accidental deletion
-* Uses `ObjectId` from `bson` to work with MongoDB document IDs
+## Step 1: Launch EC2
+
+* Ubuntu 22.04
+* Open ports:
+
+  * 22 (SSH)
+  * 8080 (Jenkins)
+  * 5000 (Flask)
 
 ---
 
-## License
+## Step 2: Connect to EC2
 
-MIT License
+```
+chmod 400 key.pem
+ssh -i key.pem ubuntu@<EC2-IP>
+```
 
 ---
 
+## Step 3: Install Docker
 
+```
+sudo apt update
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
 
+---
+
+## Step 4: Create Jenkins Dockerfile
+
+```
+nano Dockerfile
+```
+
+```
+FROM jenkins/jenkins:lts
+
+USER root
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    python3 python3-pip python3-venv git && \
+    apt-get clean
+
+USER jenkins
+```
+
+---
+
+## Step 5: Build Jenkins Image
+
+```
+docker build -t my-jenkins .
+```
+
+---
+
+## Step 6: Run Jenkins Container
+
+```
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 5000:5000 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  my-jenkins
+```
+
+---
+
+## Step 7: Access Jenkins
+
+```
+http://<EC2-IP>:8080
+```
+
+Get password:
+
+```
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+---
+
+## Step 8: Install Plugins
+
+Install suggested plugins
+
+---
+
+## Step 9: Add Credentials
+
+Manage Jenkins → Credentials
+
+```
+ID: mongo-uri
+Type: Secret Text
+
+ID: secret-key
+Type: Secret Text
+```
+
+---
+
+## Step 10: Create Pipeline Job
+
+* New Item → Pipeline
+* Pipeline from SCM
+
+```
+Repository: https://github.com/hariprn/flask_practice.git
+Branch: */main
+Script Path: Jenkinsfile
+```
+
+---
+
+## Step 11: Jenkinsfile
+
+```
+pipeline {
+    agent any
+
+    environment {
+        MONGO_URI = credentials('mongo-uri')
+        SECRET_KEY = credentials('secret-key')
+        VENV = "venv"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/hariprn/flask_practice.git'
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh '''
+                python3 -m venv $VENV
+                . $VENV/bin/activate
+                pip install --upgrade pip
+                '''
+            }
+        }
+
+        stage('Install') {
+            steps {
+                sh '''
+                . $VENV/bin/activate
+                pip install -r requirements.txt
+                pip install pytest python-dotenv
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                . $VENV/bin/activate
+                pytest
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                . $VENV/bin/activate
+                pkill -f app.py || true
+                nohup python app.py > app.log 2>&1 &
+                '''
+            }
+        }
+    }
+}
+```
+
+---
+
+## Step 12: Run Pipeline
+
+Click Build Now
+
+---
+
+## Access Application
+
+```
+http://<EC2-IP>:5000
+```
+
+---
+
+# PART 2: GitHub Actions CI/CD Pipeline
+
+## Step 1: Create Workflow
+
+```
+mkdir -p .github/workflows
+touch .github/workflows/ci-cd.yml
+```
+
+---
+
+## Workflow File
+
+```
+name: Flask CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+  release:
+    types: [created]
+
+jobs:
+
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - run: |
+          pip install -r requirements.txt
+          pip install pytest python-dotenv
+
+      - run: pytest
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+
+  deploy-staging:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging'
+    steps:
+      - run: echo "Deploying to staging..."
+
+  deploy-production:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - run: echo "Deploying to production..."
+```
+
+---
+
+## GitHub Secrets
+
+Repository → Settings → Secrets → Actions
+
+```
+MONGO_URI
+SECRET_KEY
+```
+
+---
+
+## Trigger Pipeline
+
+### Build
+
+```
+git push origin main
+```
+
+### Staging
+
+```
+git checkout staging
+git push origin staging
+```
+
+### Production
+
+```
+git tag v1.0
+git push origin v1.0
+```
+
+---
+
+## Key Learnings
+
+* Implemented CI/CD using Jenkins and GitHub Actions
+* Managed secrets securely
+* Used Docker-based Jenkins setup
+* Implemented branch-based and tag-based deployment
+* Debugged real-world issues in pipelines and infrastructure
+
+---
