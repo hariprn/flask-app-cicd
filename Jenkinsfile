@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         // Injected from Jenkins credentials
-        MONGO_URI = credentials('mongo-uri')
-        SECRET_KEY = credentials('secret-key')
+        MONGO_URI = credentials('MONGO_URI')
+        SECRET_KEY = credentials('SECRET_KEY')
         VENV = "venv"
     }
 
