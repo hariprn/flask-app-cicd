@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-This project demonstrates a complete CI/CD implementation for a Flask web application integrated with MongoDB Atlas. The assignment is implemented in two parts:
+This project demonstrates a complete CI/CD implementation for a Flask web application integrated with MongoDB Atlas.
+
+The assignment is implemented in two parts:
 
 * Part 1: Jenkins CI/CD Pipeline
 * Part 2: GitHub Actions CI/CD Pipeline
@@ -42,11 +44,10 @@ The application performs CRUD operations on student records and stores data in M
    |  Deployment Strategy     |
    +--------------------------+
         |              |
-        |              |
         v              v
 +----------------+   +----------------------+
 | Staging Deploy |   | Production Deploy    |
-| (staging branch)|  | (Git Tag / Release) |
+| (branch)       |   | (Git Tag)           |
 +----------------+   +----------------------+
         |                      |
         +----------+-----------+
@@ -171,6 +172,12 @@ docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 Install suggested plugins
 
+Also ensure:
+
+* Git plugin
+* GitHub Integration plugin
+* Email Extension plugin
+
 ---
 
 ## Step 9: Add Credentials
@@ -193,7 +200,7 @@ Type: Secret Text
 * Pipeline from SCM
 
 ```
-Repository: https://github.com/hariprn/flask_practice.git
+Repository: https://github.com/hariprn/flask-app-cicd.git
 Branch: */main
 Script Path: Jenkinsfile
 ```
@@ -216,23 +223,14 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/hariprn/flask_practice.git'
+                git branch: 'main', url: 'https://github.com/hariprn/flask-app-cicd.git'
             }
         }
 
-        stage('Setup') {
+        stage('Build') {
             steps {
                 sh '''
                 python3 -m venv $VENV
-                . $VENV/bin/activate
-                pip install --upgrade pip
-                '''
-            }
-        }
-
-        stage('Install') {
-            steps {
-                sh '''
                 . $VENV/bin/activate
                 pip install -r requirements.txt
                 pip install pytest python-dotenv
@@ -249,14 +247,33 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Staging') {
+            when {
+                expression {
+                    currentBuild.currentResult == 'SUCCESS'
+                }
+            }
             steps {
                 sh '''
                 . $VENV/bin/activate
+                echo "Deploying to staging..."
                 pkill -f app.py || true
                 nohup python app.py > app.log 2>&1 &
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            mail to: 'your-email@gmail.com',
+                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                 body: "Build succeeded: ${env.BUILD_URL}"
+        }
+        failure {
+            mail to: 'your-email@gmail.com',
+                 subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                 body: "Build failed: ${env.BUILD_URL}"
         }
     }
 }
@@ -264,9 +281,53 @@ pipeline {
 
 ---
 
-## Step 12: Run Pipeline
+## Jenkins Webhook Trigger Setup
 
-Click Build Now
+1. Go to Jenkins Job → Configure
+2. Enable:
+
+   * GitHub hook trigger for GITScm polling
+
+---
+
+### Add GitHub Webhook
+
+Repository → Settings → Webhooks
+
+```
+Payload URL: http://<EC2-IP>:8080/github-webhook/
+Content type: application/json
+Event: Push
+```
+
+---
+
+### Test Trigger
+
+```
+git commit --allow-empty -m "test webhook"
+git push origin main
+```
+
+---
+
+## Jenkins Email Notification Setup
+
+1. Install Email Extension Plugin
+
+2. Configure SMTP:
+
+```
+SMTP Server: smtp.gmail.com
+Username: your-email@gmail.com
+Password: App Password
+Port: 465
+Use SSL: Yes
+```
+
+3. Generate Gmail App Password (required)
+
+4. Test email from Jenkins UI
 
 ---
 
@@ -299,9 +360,6 @@ on:
     branches:
       - main
       - staging
-  pull_request:
-    branches:
-      - main
   release:
     types: [created]
 
@@ -319,7 +377,7 @@ jobs:
 
       - run: |
           pip install -r requirements.txt
-          pip install pytest python-dotenv
+          pip install pytest
 
       - run: pytest
         env:
@@ -328,15 +386,15 @@ jobs:
 
   deploy-staging:
     needs: build-test
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
     steps:
       - run: echo "Deploying to staging..."
 
   deploy-production:
     needs: build-test
-    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
     steps:
       - run: echo "Deploying to production..."
 ```
@@ -378,12 +436,20 @@ git push origin v1.0
 
 ---
 
-## Key Learnings
+## Conclusion
 
-* Implemented CI/CD using Jenkins and GitHub Actions
-* Managed secrets securely
-* Used Docker-based Jenkins setup
-* Implemented branch-based and tag-based deployment
-* Debugged real-world issues in pipelines and infrastructure
+This project implements:
+
+* Jenkins CI/CD with conditional staging deployment
+* Automated triggers using GitHub webhooks
+* Email notifications for build status
+* GitHub Actions CI/CD with staging and production deployment
+* Secure secrets management
+* Complete end-to-end DevOps workflow
 
 ---
+
+## Repository
+
+https://github.com/hariprn/flask-app-cicd
+

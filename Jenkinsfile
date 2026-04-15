@@ -52,33 +52,36 @@ pipeline {
                 '''
             }
         }
-
-        stage('Deploy') {
-            steps {
-                echo "Starting Flask application..."
-                sh '''
-                . $VENV/bin/activate
-
-                # Kill existing app if running
-                pkill -f app.py || true
-
-                # Start app in background
-                nohup python app.py > app.log 2>&1 &
-                '''
-            }
-        }
+	stage('Deploy to Staging') {
+	   when { 
+	       expression { 
+		   currentBuild.currentResult == 'SUCCESS' 
+	       } 
+	   } 
+	   steps { 
+	       sh ''' 
+	       . $VENV/bin/activate 
+	       echo "Deploying to staging..." 
+               pkill -f app.py || true 
+	       nohup python app.py > app.log 2>&1 & 
+	       ''' 
+	   } 
+	}
     }
 
     post {
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
-        always {
-            echo 'Cleaning workspace...'
-            cleanWs()
-        }
+    always {
+        echo 'Pipeline completed'
     }
+    success {
+        mail to: 'your-email@gmail.com',
+             subject: "SUCCESS: Job ${env.JOB_NAME} Build ${env.BUILD_NUMBER}",
+             body: "Build succeeded. Check details at ${env.BUILD_URL}"
+    }
+    failure {
+        mail to: 'your-email@gmail.com',
+             subject: "FAILURE: Job ${env.JOB_NAME} Build ${env.BUILD_NUMBER}",
+             body: "Build failed. Check logs at ${env.BUILD_URL}"
+    }
+}
 }
